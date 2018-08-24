@@ -6,6 +6,7 @@ import (
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/keybase/client/go/libkb"
 	"github.com/keybase/client/go/protocol/keybase1"
+	"github.com/keybase/pipeliner"
 	"math/big"
 	"sort"
 	"sync"
@@ -16,6 +17,7 @@ type AuditParams struct {
 	RootFreshness         time.Duration
 	MerkleMovementTrigger keybase1.Seqno
 	NumPreProbes          int
+	Parallelism           int
 }
 
 var params = AuditParams{
@@ -152,15 +154,14 @@ func (a *Auditor) doPreProbes(m libkb.MetaContext, history *keybase1.AuditHistor
 		return NewAuditError("cannot find a first modern merkle sequence")
 	}
 
-	probePairs, err := a.doProbes(m, history.PreProbes, probeId, *first, headMerkle.Seqno, params.NumPreProbes)
+	probeTuples, err := a.computeProbes(m, history.ID, history.PreProbes, probeId, *first, headMerkle.Seqno, params.NumPreProbes)
 	if err != nil {
 		return err
 	}
-	if len(probePairs) == 0 {
+	if len(probeTuples) == 0 {
 		m.CDebugf("No probe pairs, so bailing")
 		return nil
 	}
-
 	return nil
 }
 
@@ -174,12 +175,25 @@ func randSeqno(lo keybase1.Seqno, hi keybase1.Seqno) (keybase1.Seqno, error) {
 	return keybase1.Seqno(n.Int64()), nil
 }
 
-type probePair struct {
+type probeTuple struct {
 	merkle keybase1.Seqno
 	team   keybase1.Seqno
+	linkID keybase1.LinkID
 }
 
-func (a *Auditor) doProbes(m libkb.MetaContext, probes map[keybase1.Seqno]int, probeId int, left keybase1.Seqno, right keybase1.Seqno, n int) (ret []probePair, err error) {
+func (a *Auditor) computeProbes(m libkb.MetaContext, teamID keybase1.TeamID, probes map[keybase1.Seqno]int, probeId int, left keybase1.Seqno, right keybase1.Seqno, n int) (ret []probeTuple, err error) {
+	ret, err = a.scheduleProbes(m, probes, probeId, left, right, n)
+	if err != nil {
+		return nil, err
+	}
+	err = a.lookupProbes(m, teamID, ret)
+	if err != nil {
+		return nil, err
+	}
+	return ret, err
+}
+
+func (a *Auditor) scheduleProbes(m libkb.MetaContext, probes map[keybase1.Seqno]int, probeId int, left keybase1.Seqno, right keybase1.Seqno, n int) (ret []probeTuple, err error) {
 	if len(probes) > n {
 		m.CDebugf("no more probes needed; did %d, wanted %d", len(probes), n)
 		return nil, nil
@@ -195,7 +209,7 @@ func (a *Auditor) doProbes(m libkb.MetaContext, probes map[keybase1.Seqno]int, p
 			return nil, err
 		}
 		if _, found := probes[x]; !found {
-			ret = append(ret, probePair{merkle: x})
+			ret = append(ret, probeTuple{merkle: x})
 			probes[x] = probeId
 		}
 	}
@@ -203,6 +217,36 @@ func (a *Auditor) doProbes(m libkb.MetaContext, probes map[keybase1.Seqno]int, p
 		return ret[i].merkle < ret[j].merkle
 	})
 	return ret, nil
+}
+
+func (a *Auditor) lookupProbe(m libkb.MetaContext, teamID keybase1.TeamID, probe *probeTuple) error {
+	leaf, _, err := m.G().MerkleClient.LookupLeafAtSeqno(m, teamID.AsUserOrTeam(), probe.merkle)
+	if err != nil {
+		return err
+	}
+	if leaf.Private == nil {
+		return NewAuditError("nil leaf at %v/%v", teamID, probe.merkle)
+	}
+	probe.team = leaf.Private.Seqno
+	if leaf.Private.LinkID != nil {
+		probe.linkID = leaf.Private.LinkID.Export()
+	}
+	return nil
+}
+
+func (a *Auditor) lookupProbes(m libkb.MetaContext, teamID keybase1.TeamID, tuples []probeTuple) (err error) {
+	pipeliner := pipeliner.NewPipeliner(params.Parallelism)
+	for i := range tuples {
+		if err = pipeliner.WaitForRoom(m.Ctx()); err != nil {
+			return err
+		}
+		go func(probe *probeTuple) {
+			err := a.lookupProbe(m, teamID, probe)
+			pipeliner.CompleteOne(err)
+		}(&tuples[i])
+	}
+	err = pipeliner.Flush(m.Ctx())
+	return err
 }
 
 func (a *Auditor) auditLocked(m libkb.MetaContext, id keybase1.TeamID, headMerkle keybase1.MerkleRootV2, chain map[keybase1.Seqno]keybase1.LinkID, maxChainSeqno keybase1.Seqno) (err error) {
