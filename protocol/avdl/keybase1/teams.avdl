@@ -277,6 +277,13 @@ protocol teams {
     Seqno maxChainSeqno;
   }
 
+  record Probe {
+    @mpackkey("i")
+    int index;
+    @mpackkey("s")
+    Seqno teamSeqno;
+  }
+
   record AuditHistory {
     @lint("ignore")
     TeamID ID;
@@ -289,9 +296,9 @@ protocol teams {
     array<Audit> audits;
     // Probes of before the team was created. The value in the map is the index
     // of the audit (each audit has a value in the audits array above).
-    map<Seqno,int> preProbes;
+    map<Seqno,Probe> preProbes;
     // Probes of after the team was created
-    map<Seqno,int> postProbes;
+    map<Seqno,Probe> postProbes;
   }
 
   enum TeamInviteCategory {

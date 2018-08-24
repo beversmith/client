@@ -838,13 +838,25 @@ func (o Audit) DeepCopy() Audit {
 	}
 }
 
+type Probe struct {
+	Index     int   `codec:"i" json:"index"`
+	TeamSeqno Seqno `codec:"s" json:"teamSeqno"`
+}
+
+func (o Probe) DeepCopy() Probe {
+	return Probe{
+		Index:     o.Index,
+		TeamSeqno: o.TeamSeqno.DeepCopy(),
+	}
+}
+
 type AuditHistory struct {
-	ID               TeamID        `codec:"ID" json:"ID"`
-	Public           bool          `codec:"public" json:"public"`
-	PriorMerkleSeqno Seqno         `codec:"priorMerkleSeqno" json:"priorMerkleSeqno"`
-	Audits           []Audit       `codec:"audits" json:"audits"`
-	PreProbes        map[Seqno]int `codec:"preProbes" json:"preProbes"`
-	PostProbes       map[Seqno]int `codec:"postProbes" json:"postProbes"`
+	ID               TeamID          `codec:"ID" json:"ID"`
+	Public           bool            `codec:"public" json:"public"`
+	PriorMerkleSeqno Seqno           `codec:"priorMerkleSeqno" json:"priorMerkleSeqno"`
+	Audits           []Audit         `codec:"audits" json:"audits"`
+	PreProbes        map[Seqno]Probe `codec:"preProbes" json:"preProbes"`
+	PostProbes       map[Seqno]Probe `codec:"postProbes" json:"postProbes"`
 }
 
 func (o AuditHistory) DeepCopy() AuditHistory {
@@ -863,26 +875,26 @@ func (o AuditHistory) DeepCopy() AuditHistory {
 			}
 			return ret
 		})(o.Audits),
-		PreProbes: (func(x map[Seqno]int) map[Seqno]int {
+		PreProbes: (func(x map[Seqno]Probe) map[Seqno]Probe {
 			if x == nil {
 				return nil
 			}
-			ret := make(map[Seqno]int, len(x))
+			ret := make(map[Seqno]Probe, len(x))
 			for k, v := range x {
 				kCopy := k.DeepCopy()
-				vCopy := v
+				vCopy := v.DeepCopy()
 				ret[kCopy] = vCopy
 			}
 			return ret
 		})(o.PreProbes),
-		PostProbes: (func(x map[Seqno]int) map[Seqno]int {
+		PostProbes: (func(x map[Seqno]Probe) map[Seqno]Probe {
 			if x == nil {
 				return nil
 			}
-			ret := make(map[Seqno]int, len(x))
+			ret := make(map[Seqno]Probe, len(x))
 			for k, v := range x {
 				kCopy := k.DeepCopy()
-				vCopy := v
+				vCopy := v.DeepCopy()
 				ret[kCopy] = vCopy
 			}
 			return ret
