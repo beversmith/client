@@ -17,6 +17,7 @@ type AuditParams struct {
 	RootFreshness         time.Duration
 	MerkleMovementTrigger keybase1.Seqno
 	NumPreProbes          int
+	NumPostProbes         int
 	Parallelism           int
 }
 
@@ -144,6 +145,32 @@ func makeHistory(history *keybase1.AuditHistory, id keybase1.TeamID) *keybase1.A
 	}
 	ret := history.DeepCopy()
 	return &ret
+}
+
+func (a *Auditor) doPostProbes(m libkb.MetaContext, history *keybase1.AuditHistory, probeId int, headMerkle keybase1.MerkleRootV2, latestMerkleSeqno keybase1.Seqno, chain map[keybase1.Seqno]keybase1.LinkID, maxChainSeqno keybase1.Seqno) (err error) {
+	defer m.CTrace("Auditor#doPostProbes", func() error { return err })()
+	probeTuples, err := a.computeProbes(m, history.ID, history.PostProbes, probeId, headMerkle.Seqno, latestMerkleSeqno, params.NumPostProbes)
+	if err != nil {
+		return err
+	}
+	if len(probeTuples) == 0 {
+		m.CDebugf("No probe pairs, so bailing")
+		return nil
+	}
+	for i, tuple := range probeTuples {
+		m.CDebugf("postProbe: checking probe at merkle %d", tuple.merkle)
+		expectedLinkID, ok := chain[tuple.team]
+		if !ok {
+			return NewAuditError("team chain doesn't have a link for seqno %d, but expected one", tuple.team)
+		}
+		if !expectedLinkID.Eq(tuple.linkID) {
+			return NewAuditError("team chain linkID mismatch at %d: wanted %s but got %s via merkle seqno %d", tuple.team, expectedLinkID, tuple.linkID, tuple.merkle)
+		}
+		if i > 0 && probeTuples[i].team > tuple.team {
+			return NewAuditError("team chain unexpected jump: %d > %d via merkle seqno %d", probeTuples[i], tuple.team, tuple.merkle)
+		}
+	}
+	return nil
 }
 
 func (a *Auditor) doPreProbes(m libkb.MetaContext, history *keybase1.AuditHistory, probeId int, headMerkle keybase1.MerkleRootV2) (err error) {
@@ -292,6 +319,18 @@ func (a *Auditor) auditLocked(m libkb.MetaContext, id keybase1.TeamID, headMerkl
 	if err != nil {
 		return err
 	}
+
+	err = a.doPostProbes(m, history, newAuditIndex, headMerkle, *root.Seqno(), chain, maxChainSeqno)
+	if err != nil {
+		return err
+	}
+	audit := keybase1.Audit{
+		Time:           keybase1.ToTime(m.G().Clock().Now()),
+		MaxMerkleSeqno: *root.Seqno(),
+		MaxChainSeqno:  maxChainSeqno,
+	}
+	history.Audits = append(history.Audits, audit)
+	history.PriorMerkleSeqno = headMerkle.Seqno
 
 	err = a.putToCache(m, id, lru, history)
 	if err != nil {
