@@ -162,6 +162,13 @@ func (a *Auditor) doPreProbes(m libkb.MetaContext, history *keybase1.AuditHistor
 		m.CDebugf("No probe pairs, so bailing")
 		return nil
 	}
+	for _, tuple := range probeTuples {
+		m.CDebugf("preProbe: checking probe at merkle %d", tuple.merkle)
+		if tuple.team != keybase1.Seqno(0) || !tuple.linkID.IsNil() {
+			return NewAuditError("merkle root at %v should have been nil for %v; got %s/%d",
+				tuple.merkle, history.ID, tuple.linkID, tuple.team)
+		}
+	}
 	return nil
 }
 
@@ -224,8 +231,9 @@ func (a *Auditor) lookupProbe(m libkb.MetaContext, teamID keybase1.TeamID, probe
 	if err != nil {
 		return err
 	}
-	if leaf.Private == nil {
-		return NewAuditError("nil leaf at %v/%v", teamID, probe.merkle)
+	if leaf == nil || leaf.Private == nil {
+		m.CDebugf("nil leaf at %v/%v", teamID, probe.merkle)
+		return nil
 	}
 	probe.team = leaf.Private.Seqno
 	if leaf.Private.LinkID != nil {
