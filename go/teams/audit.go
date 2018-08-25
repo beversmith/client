@@ -173,7 +173,7 @@ func (a *Auditor) doPostProbes(m libkb.MetaContext, history *keybase1.AuditHisto
 		return maxMerkleProbe, err
 	}
 	if len(probeTuples) == 0 {
-		m.CDebugf("No probe pairs, so bailing")
+		m.CDebugf("No probe tuples, so bailing")
 		return maxMerkleProbe, nil
 	}
 
