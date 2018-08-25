@@ -828,6 +828,7 @@ type Audit struct {
 	Time           Time  `codec:"time" json:"time"`
 	MaxMerkleSeqno Seqno `codec:"maxMerkleSeqno" json:"maxMerkleSeqno"`
 	MaxChainSeqno  Seqno `codec:"maxChainSeqno" json:"maxChainSeqno"`
+	MaxMerkleProbe Seqno `codec:"maxMerkleProbe" json:"maxMerkleProbe"`
 }
 
 func (o Audit) DeepCopy() Audit {
@@ -835,6 +836,7 @@ func (o Audit) DeepCopy() Audit {
 		Time:           o.Time.DeepCopy(),
 		MaxMerkleSeqno: o.MaxMerkleSeqno.DeepCopy(),
 		MaxChainSeqno:  o.MaxChainSeqno.DeepCopy(),
+		MaxMerkleProbe: o.MaxMerkleProbe.DeepCopy(),
 	}
 }
 

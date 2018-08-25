@@ -275,6 +275,7 @@ protocol teams {
     Time time;
     Seqno maxMerkleSeqno;
     Seqno maxChainSeqno;
+    Seqno maxMerkleProbe;
   }
 
   record Probe {

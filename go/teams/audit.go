@@ -147,40 +147,55 @@ func makeHistory(history *keybase1.AuditHistory, id keybase1.TeamID) *keybase1.A
 	return &ret
 }
 
-func (a *Auditor) doPostProbes(m libkb.MetaContext, history *keybase1.AuditHistory, probeId int, headMerkle keybase1.MerkleRootV2, latestMerkleSeqno keybase1.Seqno, chain map[keybase1.Seqno]keybase1.LinkID, maxChainSeqno keybase1.Seqno) (err error) {
+func (a *Auditor) doPostProbes(m libkb.MetaContext, history *keybase1.AuditHistory, probeId int, headMerkle keybase1.MerkleRootV2, latestMerkleSeqno keybase1.Seqno, chain map[keybase1.Seqno]keybase1.LinkID, maxChainSeqno keybase1.Seqno) (maxMerkleProbe keybase1.Seqno, err error) {
 	defer m.CTrace("Auditor#doPostProbes", func() error { return err })()
 
 	var low keybase1.Seqno
 	last := lastAudit(history)
+	var prev *probeTuple
 	if last == nil {
 		low = headMerkle.Seqno
 	} else {
 		low = last.MaxMerkleSeqno
+		probe, ok := history.PostProbes[last.MaxMerkleProbe]
+		if !ok {
+			return maxMerkleProbe, NewAuditError("previous audit pointed to a bogus probe (seqno=%d)", last.MaxMerkleProbe)
+		}
+		prev = &probeTuple{
+			merkle: last.MaxMerkleProbe,
+			team:   probe.TeamSeqno,
+			// leave linkID nil, it's not needed...
+		}
 	}
 
 	probeTuples, err := a.computeProbes(m, history.ID, history.PostProbes, probeId, low, latestMerkleSeqno, 0, params.NumPostProbes)
 	if err != nil {
-		return err
+		return maxMerkleProbe, err
 	}
 	if len(probeTuples) == 0 {
 		m.CDebugf("No probe pairs, so bailing")
-		return nil
+		return maxMerkleProbe, nil
 	}
-	for i, tuple := range probeTuples {
+
+	for _, tuple := range probeTuples {
 		m.CDebugf("postProbe: checking probe at merkle %d", tuple.merkle)
 		expectedLinkID, ok := chain[tuple.team]
 		if !ok {
-			return NewAuditError("team chain doesn't have a link for seqno %d, but expected one", tuple.team)
+			return maxMerkleProbe, NewAuditError("team chain doesn't have a link for seqno %d, but expected one", tuple.team)
 		}
 		if !expectedLinkID.Eq(tuple.linkID) {
-			return NewAuditError("team chain linkID mismatch at %d: wanted %s but got %s via merkle seqno %d", tuple.team, expectedLinkID, tuple.linkID, tuple.merkle)
+			return maxMerkleProbe, NewAuditError("team chain linkID mismatch at %d: wanted %s but got %s via merkle seqno %d", tuple.team, expectedLinkID, tuple.linkID, tuple.merkle)
 		}
 		history.PostProbes[tuple.merkle] = keybase1.Probe{Index: probeId, TeamSeqno: tuple.team}
-		if i > 0 && probeTuples[i].team > tuple.team {
-			return NewAuditError("team chain unexpected jump: %d > %d via merkle seqno %d", probeTuples[i], tuple.team, tuple.merkle)
+		if prev != nil && prev.team > tuple.team {
+			return maxMerkleProbe, NewAuditError("team chain unexpected jump: %d > %d via merkle seqno %d", prev.team, tuple.team, tuple.merkle)
 		}
+		if tuple.merkle > maxMerkleProbe {
+			maxMerkleProbe = tuple.merkle
+		}
+		prev = &tuple
 	}
-	return nil
+	return maxMerkleProbe, nil
 }
 
 func (a *Auditor) doPreProbes(m libkb.MetaContext, history *keybase1.AuditHistory, probeId int, headMerkle keybase1.MerkleRootV2) (err error) {
@@ -330,7 +345,7 @@ func (a *Auditor) auditLocked(m libkb.MetaContext, id keybase1.TeamID, headMerkl
 		return err
 	}
 
-	err = a.doPostProbes(m, history, newAuditIndex, headMerkle, *root.Seqno(), chain, maxChainSeqno)
+	maxMerkleProbe, err := a.doPostProbes(m, history, newAuditIndex, headMerkle, *root.Seqno(), chain, maxChainSeqno)
 	if err != nil {
 		return err
 	}
@@ -338,6 +353,7 @@ func (a *Auditor) auditLocked(m libkb.MetaContext, id keybase1.TeamID, headMerkl
 		Time:           keybase1.ToTime(m.G().Clock().Now()),
 		MaxMerkleSeqno: *root.Seqno(),
 		MaxChainSeqno:  maxChainSeqno,
+		MaxMerkleProbe: maxMerkleProbe,
 	}
 	history.Audits = append(history.Audits, audit)
 	history.PriorMerkleSeqno = headMerkle.Seqno

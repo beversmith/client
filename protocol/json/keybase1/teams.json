@@ -652,6 +652,10 @@
         {
           "type": "Seqno",
           "name": "maxChainSeqno"
+        },
+        {
+          "type": "Seqno",
+          "name": "maxMerkleProbe"
         }
       ]
     },
