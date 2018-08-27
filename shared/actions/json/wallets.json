@@ -60,6 +60,9 @@
       "accountID": "Types.AccountID",
       "paymentID": "StellarRPCTypes.PaymentID",
     },
+    "makeRequestLocal": {
+      "_description": "Request payment",
+    },
     "paymentDetailReceived": {
       "_description": "Update a payment with additional detail",
       "accountID": "Types.AccountID",
