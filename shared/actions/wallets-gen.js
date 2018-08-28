@@ -27,10 +27,11 @@ export const loadAccounts = 'wallets:loadAccounts'
 export const loadAssets = 'wallets:loadAssets'
 export const loadPaymentDetail = 'wallets:loadPaymentDetail'
 export const loadPayments = 'wallets:loadPayments'
-export const makeRequestLocal = 'wallets:makeRequestLocal'
 export const paymentDetailReceived = 'wallets:paymentDetailReceived'
 export const paymentsReceived = 'wallets:paymentsReceived'
 export const refreshPayments = 'wallets:refreshPayments'
+export const requestPayment = 'wallets:requestPayment'
+export const requestedPayment = 'wallets:requestedPayment'
 export const secretKeyReceived = 'wallets:secretKeyReceived'
 export const secretKeySeen = 'wallets:secretKeySeen'
 export const selectAccount = 'wallets:selectAccount'
@@ -83,7 +84,6 @@ type _LoadPaymentDetailPayload = $ReadOnly<{|
   paymentID: StellarRPCTypes.PaymentID,
 |}>
 type _LoadPaymentsPayload = $ReadOnly<{|accountID: Types.AccountID|}>
-type _MakeRequestLocalPayload = void
 type _PaymentDetailReceivedPayload = $ReadOnly<{|
   accountID: Types.AccountID,
   paymentID: StellarRPCTypes.PaymentID,
@@ -97,6 +97,8 @@ type _PaymentsReceivedPayload = $ReadOnly<{|
   pending: Array<Types.Payment>,
 |}>
 type _RefreshPaymentsPayload = $ReadOnly<{|accountID: Types.AccountID|}>
+type _RequestPaymentPayload = void
+type _RequestedPaymentPayload = $ReadOnly<{|kbRqID: HiddenString|}>
 type _SecretKeyReceivedPayload = $ReadOnly<{|
   accountID: Types.AccountID,
   secretKey: HiddenString,
@@ -196,7 +198,7 @@ export const createLoadPayments = (payload: _LoadPaymentsPayload) => ({error: fa
 /**
  * Request payment
  */
-export const createMakeRequestLocal = (payload: _MakeRequestLocalPayload) => ({error: false, payload, type: makeRequestLocal})
+export const createRequestPayment = (payload: _RequestPaymentPayload) => ({error: false, payload, type: requestPayment})
 /**
  * Select an account. Optionally navigate to the account page.
  */
@@ -229,6 +231,10 @@ export const createSetBuildingSecretNote = (payload: _SetBuildingSecretNotePaylo
  * Set building to -- depends on recipientType
  */
 export const createSetBuildingTo = (payload: _SetBuildingToPayload) => ({error: false, payload, type: setBuildingTo})
+/**
+ * Successfully request payment
+ */
+export const createRequestedPayment = (payload: _RequestedPaymentPayload) => ({error: false, payload, type: requestedPayment})
 /**
  * Successfully sent a payment
  */
@@ -297,10 +303,11 @@ export type LoadAccountsPayload = $Call<typeof createLoadAccounts, _LoadAccounts
 export type LoadAssetsPayload = $Call<typeof createLoadAssets, _LoadAssetsPayload>
 export type LoadPaymentDetailPayload = $Call<typeof createLoadPaymentDetail, _LoadPaymentDetailPayload>
 export type LoadPaymentsPayload = $Call<typeof createLoadPayments, _LoadPaymentsPayload>
-export type MakeRequestLocalPayload = $Call<typeof createMakeRequestLocal, _MakeRequestLocalPayload>
 export type PaymentDetailReceivedPayload = $Call<typeof createPaymentDetailReceived, _PaymentDetailReceivedPayload>
 export type PaymentsReceivedPayload = $Call<typeof createPaymentsReceived, _PaymentsReceivedPayload>
 export type RefreshPaymentsPayload = $Call<typeof createRefreshPayments, _RefreshPaymentsPayload>
+export type RequestPaymentPayload = $Call<typeof createRequestPayment, _RequestPaymentPayload>
+export type RequestedPaymentPayload = $Call<typeof createRequestedPayment, _RequestedPaymentPayload>
 export type SecretKeyReceivedPayload = $Call<typeof createSecretKeyReceived, _SecretKeyReceivedPayload>
 export type SecretKeySeenPayload = $Call<typeof createSecretKeySeen, _SecretKeySeenPayload>
 export type SelectAccountPayload = $Call<typeof createSelectAccount, _SelectAccountPayload>
@@ -341,10 +348,11 @@ export type Actions =
   | LoadAssetsPayload
   | LoadPaymentDetailPayload
   | LoadPaymentsPayload
-  | MakeRequestLocalPayload
   | PaymentDetailReceivedPayload
   | PaymentsReceivedPayload
   | RefreshPaymentsPayload
+  | RequestPaymentPayload
+  | RequestedPaymentPayload
   | SecretKeyReceivedPayload
   | SecretKeySeenPayload
   | SelectAccountPayload

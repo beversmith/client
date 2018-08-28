@@ -185,6 +185,7 @@ const createNewAccountWaitingKey = 'wallets:createNewAccount'
 const linkExistingWaitingKey = 'wallets:linkExisting'
 const loadEverythingWaitingKey = 'wallets:loadEverything'
 const sendPaymentWaitingKey = 'wallets:stellarSend'
+const requestPaymentWaitingKey = 'wallets:requestPayment'
 
 const getAccountIDs = (state: TypedState) => state.wallets.accountMap.keySeq().toList()
 
@@ -243,5 +244,6 @@ export {
   paymentResultToPayment,
   paymentToCounterpartyType,
   paymentToYourRole,
+  requestPaymentWaitingKey,
   sendPaymentWaitingKey,
 }
